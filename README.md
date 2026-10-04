@@ -1,6 +1,8 @@
 # YouTube MCP Server
 
-MCP server that brings YouTube to Claude Code — video transcripts, search, metadata, channel info, playlists, comments, trending videos, engagement analytics, chapter extraction, SponsorBlock integration, and most-replayed heatmaps. Uses the YouTube Data API v3, youtube-transcript, and SponsorBlock.
+MCP server that brings YouTube to Claude Code and claude.ai — video transcripts, search, metadata, channel info, playlists, comments, trending videos, engagement analytics, chapter extraction, SponsorBlock integration, and most-replayed heatmaps. Uses the YouTube Data API v3, youtube-transcript, and SponsorBlock.
+
+> **Want to use it from claude.ai (web / desktop / mobile)?** See [Self-Hosting on a VPS (Docker)](#self-hosting-on-a-vps-docker--use-it-from-claudeai).
 
 ## Quick Start
 
@@ -315,6 +317,62 @@ This MCP server connects to Claude Code via stdio transport and provides 15 tool
 
 ---
 
+## Self-Hosting on a VPS (Docker) — use it from claude.ai
+
+In HTTP mode the server speaks the MCP **Streamable HTTP** transport, so it can be added as a
+**custom connector** on claude.ai (web, desktop and mobile apps) as well as in Claude Code.
+
+### 1. Prerequisites
+
+- A VPS with Docker and Docker Compose
+- A domain (or subdomain) with a DNS **A record** pointing to the VPS IP
+- Ports **80** and **443** open (Caddy uses them to get a Let's Encrypt certificate)
+
+### 2. Configure
+
+```text
+git clone <this repo> youtube-mcp && cd youtube-mcp
+cp .env.example .env
+openssl rand -hex 32   # use the output as MCP_AUTH_TOKEN
+nano .env              # set YOUTUBE_API_KEY, MCP_AUTH_TOKEN and DOMAIN
+```
+
+### 3. Start
+
+```text
+docker compose up -d --build
+docker compose logs -f
+```
+
+Check it: `curl https://<DOMAIN>/health` should return `{"status":"ok"}`.
+
+> Already running a reverse proxy (Traefik, nginx, Nginx Proxy Manager…)? Remove the `caddy`
+> service from `docker-compose.yml`, expose the `youtube-mcp` container on port 3000 and point
+> your proxy at it.
+
+### 4. Add it to claude.ai
+
+1. Go to **Settings → Connectors → Add custom connector**
+2. Name: `YouTube`
+3. URL: `https://<DOMAIN>/mcp/<MCP_AUTH_TOKEN>`
+4. Leave the OAuth fields empty and click **Add**
+
+The token in the URL is what protects your server (and your YouTube API quota): keep the URL
+private. The connector is then available in claude.ai on the web, in the desktop app and on mobile.
+
+### Use the remote server from Claude Code
+
+```text
+claude mcp add -s user --transport http youtube https://<DOMAIN>/mcp \
+  --header "Authorization: Bearer <MCP_AUTH_TOKEN>"
+```
+
+### Update
+
+```text
+git pull && docker compose up -d --build
+```
+
 ## Configuration
 
 ### Environment Variables
@@ -323,6 +381,10 @@ This MCP server connects to Claude Code via stdio transport and provides 15 tool
 |----------|----------|---------|-------------|
 | `YOUTUBE_API_KEY` | Yes | — | YouTube Data API v3 key |
 | `YOUTUBE_TIMEOUT` | No | `30000` | API timeout in ms |
+| `MCP_TRANSPORT` | No | `stdio` | `stdio` (local, Claude Code) or `http` (remote, claude.ai) |
+| `PORT` | No | `3000` | HTTP port (HTTP mode only) |
+| `HOST` | No | `0.0.0.0` | HTTP bind address (HTTP mode only) |
+| `MCP_AUTH_TOKEN` | Recommended in HTTP mode | — | Secret required to call the `/mcp` endpoint |
 
 ### YouTube API Quota
 
