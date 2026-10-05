@@ -8,29 +8,12 @@ services:
     environment:
       MCP_TRANSPORT: http
       PORT: 3000
-    # Not exposed publicly: Caddy forwards HTTPS traffic to it.
-    # If you use your own reverse proxy instead of Caddy, remove the caddy
-    # service below and uncomment this to bind the port to localhost only:
-    # ports:
-    #   - "127.0.0.1:3000:3000"
+    # Joins Nginx Proxy Manager's Docker network so NPM can reach it as
+    # http://youtube-mcp:3000 without exposing any port on the host.
+    networks:
+      - npm
 
-  # Automatic HTTPS (Let's Encrypt) — claude.ai requires a public HTTPS URL.
-  caddy:
-    image: caddy:2-alpine
-    container_name: youtube-mcp-caddy
-    restart: unless-stopped
-    ports:
-      - "80:80"
-      - "443:443"
-    environment:
-      DOMAIN: ${DOMAIN:?Set DOMAIN in .env}
-    volumes:
-      - ./Caddyfile:/etc/caddy/Caddyfile:ro
-      - caddy_data:/data
-      - caddy_config:/config
-    depends_on:
-      - youtube-mcp
-
-volumes:
-  caddy_data:
-  caddy_config:
+networks:
+  npm:
+    external: true
+    name: ${NPM_NETWORK:-npm_default}

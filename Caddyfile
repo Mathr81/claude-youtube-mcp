@@ -1,3 +1,0 @@
-{$DOMAIN} {
-	reverse_proxy youtube-mcp:3000
-}

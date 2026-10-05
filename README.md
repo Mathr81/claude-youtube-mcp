@@ -324,9 +324,8 @@ In HTTP mode the server speaks the MCP **Streamable HTTP** transport, so it can 
 
 ### 1. Prerequisites
 
-- A VPS with Docker and Docker Compose
+- A VPS with Docker, Docker Compose and [Nginx Proxy Manager](https://nginxproxymanager.com/) running in Docker
 - A domain (or subdomain) with a DNS **A record** pointing to the VPS IP
-- Ports **80** and **443** open (Caddy uses them to get a Let's Encrypt certificate)
 
 ### 2. Configure
 
@@ -334,7 +333,13 @@ In HTTP mode the server speaks the MCP **Streamable HTTP** transport, so it can 
 git clone <this repo> youtube-mcp && cd youtube-mcp
 cp .env.example .env
 openssl rand -hex 32   # use the output as MCP_AUTH_TOKEN
-nano .env              # set YOUTUBE_API_KEY, MCP_AUTH_TOKEN and DOMAIN
+nano .env              # set YOUTUBE_API_KEY, MCP_AUTH_TOKEN and NPM_NETWORK
+```
+
+`NPM_NETWORK` is the Docker network of your Nginx Proxy Manager container. Find it with:
+
+```text
+docker inspect -f '{{range $k, $v := .NetworkSettings.Networks}}{{$k}} {{end}}' <npm-container-name>
 ```
 
 ### 3. Start
@@ -344,17 +349,25 @@ docker compose up -d --build
 docker compose logs -f
 ```
 
-Check it: `curl https://<DOMAIN>/health` should return `{"status":"ok"}`.
+The container joins NPM's network and exposes no port on the host.
 
-> Already running a reverse proxy (Traefik, nginx, Nginx Proxy Manager…)? Remove the `caddy`
-> service from `docker-compose.yml`, expose the `youtube-mcp` container on port 3000 and point
-> your proxy at it.
+### 4. Add a Proxy Host in Nginx Proxy Manager
 
-### 4. Add it to claude.ai
+- **Details** tab:
+  - Domain Names: `youtube-mcp.example.com`
+  - Scheme: `http`
+  - Forward Hostname / IP: `youtube-mcp`
+  - Forward Port: `3000`
+  - Enable **Block Common Exploits**
+- **SSL** tab: request a new Let's Encrypt certificate, enable **Force SSL** and **HTTP/2 Support**
+
+Check it: `curl https://youtube-mcp.example.com/health` should return `{"status":"ok"}`.
+
+### 5. Add it to claude.ai
 
 1. Go to **Settings → Connectors → Add custom connector**
 2. Name: `YouTube`
-3. URL: `https://<DOMAIN>/mcp/<MCP_AUTH_TOKEN>`
+3. URL: `https://youtube-mcp.example.com/mcp/<MCP_AUTH_TOKEN>`
 4. Leave the OAuth fields empty and click **Add**
 
 The token in the URL is what protects your server (and your YouTube API quota): keep the URL
@@ -363,7 +376,7 @@ private. The connector is then available in claude.ai on the web, in the desktop
 ### Use the remote server from Claude Code
 
 ```text
-claude mcp add -s user --transport http youtube https://<DOMAIN>/mcp \
+claude mcp add -s user --transport http youtube https://youtube-mcp.example.com/mcp \
   --header "Authorization: Bearer <MCP_AUTH_TOKEN>"
 ```
 
